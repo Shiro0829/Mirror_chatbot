@@ -13,6 +13,13 @@ import os
 import re
 
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_classic.retrievers import BM25Retriever
+from langchain_classic.retrievers import EnsembleRetriever
+
+
 
 ## Config Path 
 PDF_PATH = os.path.join(os.path.dirname(__file__), "data", "sank_resume.pdf") ##absolute path for the data 
@@ -56,7 +63,32 @@ def clean_documents(docs):
         doc.page_content = clean_text(doc.page_content)
     return docs
 
+def chunk_documents(docs):
+    """
+    Chunking the text/ splitting the documents into smaller chunks for processing
+    """
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size = CHUNK_SIZE,
+        chunk_overlap = CHUNK_OVERLAP,
+        separators= ["\n\n", "\n", " ", ""]
+
+    )
+    chunks= text_splitter.split_documents(docs)
+    return chunks
 
 
 raw_docs = load_pdf(PDF_PATH)
-print(raw_docs[0].page_content)
+print(raw_docs[0].page_content) ## Printing the first page content before cleaning up
+
+print("\n====================")
+cleaned_docs =clean_documents(raw_docs)
+print(cleaned_docs[0].page_content)
+
+print("\n====================")
+
+
+chunks = chunk_documents(cleaned_docs)
+print("\n--- CHUNK 0 ---")
+print(chunks[0].page_content)
+print("\n--- CHUNK 1 ---")
+print(chunks[1].page_content)
