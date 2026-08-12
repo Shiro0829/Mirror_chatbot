@@ -1,2 +1,19 @@
+#Data folder containing datas
+/MIRROCHATBOT/data/
+
+#Virtual Environment 
 .venv/
-.venv/
+venv/
+env/
+
+#Python cache & artifacts 
+__pycache__/
+*.__pycache__
+.pytest_cache/
+
+#Sensitive environment variable 
+.env
+
+
+
+
