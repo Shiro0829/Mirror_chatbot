@@ -12,6 +12,7 @@ Phase 1: Ingestion pipeline
 import os
 import re
 
+from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -19,15 +20,19 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.retrievers import BM25Retriever 
 from langchain_classic.retrievers import EnsembleRetriever
 
+import config as config
+
 ## Defining config path
-PDF_PATH = os.path.join(os.path.dirname(__file__), "data", "sample.pdf")
-PERSIST_DIR = "./chroma" ## Path for storing vector database
-COLLECTION_NAME = "cv_collection"
+# PDF_PATH = os.path.join(os.path.dirname(__file__), "data", "sample.pdf")
+# PERSIST_DIR = "./chroma" ## Path for storing vector database
+# COLLECTION_NAME = "cv_collection"
 
-CHUNK_SIZE = 600
-CHUNK_OVERLAP = 100
+# CHUNK_SIZE = 600
+# CHUNK_OVERLAP = 100
 
-EMBEDDINGS_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+# EMBEDDINGS_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+BASE_DIR = os.path.dirname(__file__)
+PDF_PATH = os.path.join(BASE_DIR, "sample.pdf")
 
 ##    Step1: Load pdf
 def load_pdf(pdf_path:str):
@@ -70,8 +75,8 @@ def chunk_document(docs):
     Splitting the documents into smaller chunks for processing.
     """
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size = CHUNK_SIZE,
-        chunk_overlap = CHUNK_OVERLAP,
+        chunk_size = config.CHUNK_SIZE,
+        chunk_overlap = config.CHUNK_OVERLAP,
         separators= ["\n\n", "\n", " ", ""]
     )
     chunks = text_splitter.split_documents(docs)
@@ -86,17 +91,17 @@ def get_embeddings():
     """
     global _embeddings
     if _embeddings is None:
-        _embeddings = HuggingFaceEmbeddings(model_name = EMBEDDINGS_MODEL_NAME)
+        _embeddings = HuggingFaceEmbeddings(model_name = config.EMBEDDINGS_MODEL_NAME)
     return _embeddings
 
 
-def build_vector_store(chunks, persist_dir = PERSIST_DIR, collection_name= COLLECTION_NAME):
+def build_vector_store(chunks, persist_dir = config.PERSIST_DIR, collection_name= config.COLLECTION_NAME):
     """
     Building a vector store from the document chunks.
     """
     embeddings = get_embeddings()
     vector_store = Chroma(
-        collection_name= COLLECTION_NAME,
+        collection_name= config.COLLECTION_NAME,
         embedding_function= embeddings,
         persist_directory= persist_dir
     )
@@ -138,27 +143,67 @@ def test_hybrid_retriever(retriever, query: str):
     return results
 
 
+##Preprocess function for bm25 retriever 
+def bm25_preprocess_function(text:str)->str:
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text) #Removing punctuations 
+    return text.split()
 
 
-raw_docs = load_pdf(PDF_PATH)
-cleaned_docs = clean_documents(raw_docs)
-chunks = chunk_document(cleaned_docs)
-vector_store = build_vector_store(chunks)
-retriever = build_hybrid_retriever(vector_store, chunks)
+def rebuild_b25_from_chroma(vector_store, top_k: int = config.RETRIEVAL_K)-> BM25Retriever:
+    """
+    Rebuild the BM25 retriever from the documents stored in the chroma vector store.
+    """
+    stored = vector_store.get(include= ["documents", "metadatas"])
 
-print("----------------------------------------------")
-print(test_hybrid_retriever(retriever, "What CERTIFICATIONS are in document?"))
-print("----------------------------------------------")
+    docs = [
+        Document(page_content = text, metadata = meta or {})
+        for text, meta in zip(stored["documents"], stored["metadatas"])
+    ]
+
+    bm25_retriever = BM25Retriever.from_documents(
+        docs,
+        preprocess_function = bm25_preprocess_function
+    )
+
+    bm25_retriever.k = int(top_k)
+    return bm25_retriever
 
 
-# print(repr(chunks[0].page_content))
-# print("\n ----------------------------------secondchunk---------------------")
-# print(repr(chunks[1].page_content))
+def build_hybrid_retriver_from_store(
+        vector_store, 
+        k: int = config.RETRIEVAL_K,
+        dense_weight: float = config.DENSE_WEIGHT,
+        bm25_weight: float = config.BM25_WEIGHT
+):
+    """
+        Building a hybrid retriever using the chroma vectore store and BM25 retriever.
+    """
+    bm25_retriever = rebuild_b25_from_chroma(vector_store, top_k= k)
+    dense_retriever = vector_store.as_retriever(search_kwargs= {"k": k})
+
+    hybrid_retriever = EnsembleRetriever(
+        retrievers= [bm25_retriever, dense_retriever],
+        weights= [bm25_weight, dense_weight]
+    )
+    return hybrid_retriever
 
 
-# print("\n ----------------------------------ThirdChunk---------------------")
-# print(repr(chunks[2].page_content))
-# if __name__ == "__main__":
-#     docs = load_pdf(PDF_PATH)
+def run_ingest_pipeline(pdf_path: str = config.PDF_PATH, persist_dir:str = config.PERSIST_DIR):
+    """
+    Run the entire ingestion pipeline: Load PDF, Clean Text, Chunk Documents, 
+    build vector store, and create hybrid retriever.
+    """
+    raw_docs = load_pdf(pdf_path)
+    cleaned_docs = clean_documents(raw_docs)
+    chunks = chunk_document(cleaned_docs)
+    vector_store = build_vector_store(chunks, persist_dir=persist_dir)
+
+    return vector_store, chunks
+
+if __name__ == "__main__":
+    vector_store, chunks = run_ingest_pipeline()
+    hybrid_retriever = build_hybrid_retriver_from_store(vector_store, k=2)
+    test_hybrid_retriever(hybrid_retriever, "Which language is user proficent in?")
 
 
