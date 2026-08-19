@@ -89,4 +89,17 @@ def build_conversational_chain(
     )
 
 
+if __name__ == "__main__":
+    chain = build_conversational_chain()
+    session_id = "cli-test-session"
 
+    print(f"Chatting with {config.PERSON_NAME}'s CV bot. Type 'exit' to quit. \n")
+    while True:
+        user_input = input("You: ").strip()
+        if user_input.lower() in {"exit", "quit"}:
+            break
+        response = chain.invoke(
+            {"input": user_input},
+            config={"configurable": {"session_id": session_id}},
+        )
+        print(f"Bot: {response['answer']}\n")
