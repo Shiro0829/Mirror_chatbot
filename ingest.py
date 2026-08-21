@@ -45,6 +45,7 @@ def load_pdf(pdf_path:str):
     return docs
 
 
+
 def clean_text(text:str)-> str:
     """
     Cleaning the text by removing unwanted characters and formatting.
@@ -54,9 +55,10 @@ def clean_text(text:str)-> str:
 
     ## Removing empty lines
     lines = [line for line in lines if line]
-
+    
     ##Joining the lines back into a single string
     return "\n".join(lines)
+
 
 
 def clean_documents(docs):
@@ -115,6 +117,8 @@ def build_vector_store(chunks, persist_dir = config.PERSIST_DIR, collection_name
     return vector_store
 
 
+# print(f"Loaded -----------------------\n {chunked_docs} ")
+
 def build_hybrid_retriever(vector_store, chunks, top_k: int =4, dense_weight: float= 0.5, bm_25_weight: float = 0.5):
     """
     Build a hybrid retriever using BM25 and vector search.
@@ -170,7 +174,7 @@ def rebuild_b25_from_chroma(vector_store, top_k: int = config.RETRIEVAL_K)-> BM2
     return bm25_retriever
 
 
-def build_hybrid_retriver_from_store(
+def build_hybrid_retriever_from_store(
         vector_store, 
         k: int = config.RETRIEVAL_K,
         dense_weight: float = config.DENSE_WEIGHT,
@@ -203,7 +207,7 @@ def run_ingest_pipeline(pdf_path: str = config.PDF_PATH, persist_dir:str = confi
 
 if __name__ == "__main__":
     vector_store, chunks = run_ingest_pipeline()
-    hybrid_retriever = build_hybrid_retriver_from_store(vector_store, k=2)
+    hybrid_retriever = build_hybrid_retriever_from_store(vector_store, k=2)
     test_hybrid_retriever(hybrid_retriever, "Which language is user proficent in?")
 
 
