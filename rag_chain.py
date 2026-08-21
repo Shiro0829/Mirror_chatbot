@@ -55,7 +55,7 @@ def build_answer_prompt(person_name: str = config.PERSON_NAME) -> ChatPromptTemp
             ("human", "{input}"),
         ]
     )
-
+##Calling hybrid retriever from ingest.py
 def build_history_aware_retriever(llm, vectorstore):
     hybrid_retriever = build_hybrid_retriever_from_store(vectorstore)
     return create_history_aware_retriever(llm, hybrid_retriever, build_contextualize_prompt())
@@ -64,7 +64,9 @@ def build_rag_chain(llm, build_history_aware_retriever, person_name: str = confi
     document_chain = create_stuff_documents_chain(llm, build_answer_prompt(person_name))
     return create_retrieval_chain(build_history_aware_retriever, document_chain)
 
-_session_store: dict[str, BaseChatMessageHistory] = {} ## session is used to store the users history 
+## session is used to store the users history 
+_session_store: dict[str, BaseChatMessageHistory] = {} 
+
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     if session_id not in _session_store:
